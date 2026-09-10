@@ -1,0 +1,67 @@
+name: Prepare WordPress release
+description: Decide semver bump, update version headers and CHANGELOG
+inputs:
+  github_token:
+    description: Token for optional GitHub Models AI fallback
+    required: false
+    default: ""
+  project_type:
+    description: auto | plugin | theme
+    required: false
+    default: auto
+  slug:
+    description: ZIP root folder override
+    required: false
+    default: ""
+  main_file:
+    description: Relative path to main plugin PHP file
+    required: false
+    default: ""
+outputs:
+  skip:
+    description: Whether there is nothing to release
+    value: ${{ steps.run.outputs.skip }}
+  bump:
+    description: major | minor | patch
+    value: ${{ steps.run.outputs.bump }}
+  source:
+    description: conventional | ai | fallback
+    value: ${{ steps.run.outputs.source }}
+  project_type:
+    description: Detected project type
+    value: ${{ steps.run.outputs.project_type }}
+  slug:
+    description: Package slug
+    value: ${{ steps.run.outputs.slug }}
+  main_file:
+    description: Relative main file path
+    value: ${{ steps.run.outputs.main_file }}
+  current_version:
+    description: Previous version
+    value: ${{ steps.run.outputs.current_version }}
+  new_version:
+    description: Bumped version
+    value: ${{ steps.run.outputs.new_version }}
+  tag:
+    description: Tag name including v prefix
+    value: ${{ steps.run.outputs.tag }}
+  notes_file:
+    description: Path to release notes markdown
+    value: ${{ steps.run.outputs.notes_file }}
+  commit_paths:
+    description: Files to stage for the release commit
+    value: ${{ steps.run.outputs.commit_paths }}
+runs:
+  using: composite
+  steps:
+    - id: run
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        WORK_DIR: ${{ github.workspace }}
+        PROJECT_TYPE: ${{ inputs.project_type }}
+        SLUG: ${{ inputs.slug }}
+        MAIN_FILE: ${{ inputs.main_file }}
+      run: |
+        chmod +x "${{ github.action_path }}/../../scripts/"*.sh "${{ github.action_path }}/../../scripts/lib/"*.sh
+        "${{ github.action_path }}/../../scripts/prepare-release.sh"

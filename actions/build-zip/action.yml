@@ -1,0 +1,41 @@
+name: Build WordPress ZIP
+description: Package a WordPress plugin or theme ZIP with the correct root folder
+inputs:
+  project_type:
+    description: auto | plugin | theme
+    required: false
+    default: auto
+  slug:
+    description: ZIP root folder override
+    required: false
+    default: ""
+  main_file:
+    description: Relative path to main plugin PHP file
+    required: false
+    default: ""
+outputs:
+  zip_path:
+    description: Absolute path to the built ZIP
+    value: ${{ steps.run.outputs.zip_path }}
+  zip_name:
+    description: ZIP filename
+    value: ${{ steps.run.outputs.zip_name }}
+  version:
+    description: Version packaged
+    value: ${{ steps.run.outputs.version }}
+  slug:
+    description: Package slug
+    value: ${{ steps.run.outputs.slug }}
+runs:
+  using: composite
+  steps:
+    - id: run
+      shell: bash
+      env:
+        WORK_DIR: ${{ github.workspace }}
+        PROJECT_TYPE: ${{ inputs.project_type }}
+        SLUG: ${{ inputs.slug }}
+        MAIN_FILE: ${{ inputs.main_file }}
+      run: |
+        chmod +x "${{ github.action_path }}/../../scripts/"*.sh "${{ github.action_path }}/../../scripts/lib/"*.sh
+        "${{ github.action_path }}/../../scripts/build-wp-zip.sh"

@@ -37,7 +37,6 @@ jobs:
       project_type: auto          # auto | plugin | theme
       slug: my-plugin             # ZIP root folder (defaults to main PHP basename / theme dir)
       main_file: my-plugin.php    # plugin only, if auto-detect fails
-      tooling_ref: v1             # pin scripts to this wp-release tag
 ```
 
 ## What it does
@@ -59,6 +58,10 @@ Release commits themselves are skipped (`chore(release):`).
 **Settings → Actions → General → Workflow permissions** → **Read and write permissions**.
 
 For AI fallback, GitHub Models must be allowed for the org (`models: read` is already on the reusable workflow).
+
+## How scripts are loaded
+
+Caller repos must not `git clone` this private repo with `GITHUB_TOKEN` (it only has access to the caller). Scripts run via **composite actions** under `actions/`, which GitHub fetches when the reusable workflow references `sometechwork/wp-release/actions/...@v1`.
 
 ## Local scripts
 
