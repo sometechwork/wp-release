@@ -1,0 +1,109 @@
+name: WordPress Release
+
+on:
+  workflow_call:
+    inputs:
+      branch:
+        description: Branch to push the release commit to
+        type: string
+        required: false
+        default: main
+      project_type:
+        description: auto | plugin | theme
+        type: string
+        required: false
+        default: auto
+      slug:
+        description: ZIP root folder name (defaults to plugin main file basename or theme directory name)
+        type: string
+        required: false
+        default: ""
+      main_file:
+        description: Relative path to main plugin PHP file (optional override)
+        type: string
+        required: false
+        default: ""
+      tooling_ref:
+        description: Ref of sometechwork/wp-release to run scripts from
+        type: string
+        required: false
+        default: v1
+
+permissions:
+  contents: write
+  models: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
+
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout release tooling
+        uses: actions/checkout@v4
+        with:
+          repository: sometechwork/wp-release
+          ref: ${{ inputs.tooling_ref }}
+          path: .wp-release
+
+      - name: Prepare release (bump + changelog)
+        id: prepare
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WORK_DIR: ${{ github.workspace }}
+          PROJECT_TYPE: ${{ inputs.project_type }}
+          SLUG: ${{ inputs.slug }}
+          MAIN_FILE: ${{ inputs.main_file }}
+        run: |
+          chmod +x .wp-release/scripts/*.sh .wp-release/scripts/lib/*.sh
+          .wp-release/scripts/prepare-release.sh
+
+      - name: Skip when nothing to release
+        if: steps.prepare.outputs.skip == 'true'
+        run: echo "No releasable commits; exiting."
+
+      - name: Commit version bump
+        if: steps.prepare.outputs.skip != 'true'
+        env:
+          BRANCH: ${{ inputs.branch }}
+          NEW_VERSION: ${{ steps.prepare.outputs.new_version }}
+          COMMIT_PATHS: ${{ steps.prepare.outputs.commit_paths }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Stage changed release files (unique).
+          printf '%s\n' "${COMMIT_PATHS}" | sed '/^$/d' | sort -u | while read -r f; do
+            [[ -e "${f}" ]] && git add -- "${f}"
+          done
+          git add -u -- CHANGELOG.md || true
+          git status --short
+          git commit -m "chore(release): v${NEW_VERSION}"
+          git tag "v${NEW_VERSION}"
+          git push origin "HEAD:${BRANCH}"
+          git push origin "v${NEW_VERSION}"
+
+      - name: Build WordPress ZIP
+        id: zip
+        if: steps.prepare.outputs.skip != 'true'
+        env:
+          WORK_DIR: ${{ github.workspace }}
+          PROJECT_TYPE: ${{ inputs.project_type }}
+          SLUG: ${{ inputs.slug }}
+          MAIN_FILE: ${{ inputs.main_file }}
+        run: .wp-release/scripts/build-wp-zip.sh
+
+      - name: Create GitHub Release
+        if: steps.prepare.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ steps.prepare.outputs.new_version }}" \
+            "dist/${{ steps.prepare.outputs.slug }}-${{ steps.prepare.outputs.new_version }}.zip" \
+            --title "v${{ steps.prepare.outputs.new_version }}" \
+            --notes-file "${{ steps.prepare.outputs.notes_file }}"
